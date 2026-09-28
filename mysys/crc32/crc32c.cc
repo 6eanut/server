@@ -505,7 +505,26 @@ extern "C" const char *crc32c_x86_impl(my_crc32_t);
 static my_crc32_t crc32c_riscv_choose(void *hwprobe)
 {
   unsigned ext= rv_riscv_crc_ext(hwprobe);
-  if (ext & 1)                    /* scalar Zbc available: prefer it */
+  /* Where scalar Zbc is available, prefer it over the Zvbc vector core.
+
+     The vector core does not buy extra parallelism here. To stay
+     bit-exact with the scalar core it reuses exactly the same fold:
+     four 128-bit lanes over a fixed 64-byte span, with the same
+     constants k1..k4 and the same Barrett step. It therefore caps vl
+     at 4 and folds 64 bytes per iteration however wide VLEN is, and it
+     issues the same number of carry-less multiplies. Its only edge is
+     a single de-interleaving segment load per 64 bytes, which on large
+     input is offset by its per-call overhead (vsetvl, and injecting
+     the CRC into lane 0 through a store/load round trip): on Spacemit
+     X100 (VLEN=256) it ties the scalar fold at 64 KiB (11398 vs 11687
+     MB/s) and loses on small input (128 B: 1147 vs 5540 MB/s,
+     1 KiB: 5466 vs 10277 MB/s).
+
+     Its reason to exist is cores that implement Zvbc but not scalar
+     Zbc, where the only alternative is the slicing-by-4 crc32c_slow.
+     Where Zbc is present, selecting it would only touch the vector
+     register file for no gain. */
+  if (ext & 1)
     return crc32c_riscv_zbc;
 #ifdef HAVE_RISCV_ZVBC
   if (ext & 2)                    /* Zvbc only (no scalar Zbc) */

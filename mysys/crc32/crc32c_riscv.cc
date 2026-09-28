@@ -16,6 +16,7 @@ argument is NULL and the system call is made directly.
 */
 
 #include <stddef.h>
+#include <tuple>
 #include <unistd.h>
 #include <sys/syscall.h>
 
@@ -94,7 +95,6 @@ extern "C" unsigned rv_riscv_crc_ext(void *hwprobe)
   struct riscv_hwprobe p;
   p.key= RISCV_HWPROBE_KEY_IMA_EXT_0;
   p.value= 0;
-  unsigned ext= 0;
 #ifdef HAVE_SYS_HWPROBE_H
   if (hwprobe != NULL)
   {
@@ -102,20 +102,16 @@ extern "C" unsigned rv_riscv_crc_ext(void *hwprobe)
     if (__riscv_hwprobe_one(reinterpret_cast<__riscv_hwprobe_t>(hwprobe),
                             RISCV_HWPROBE_KEY_IMA_EXT_0, &value) != 0)
       return 0;
-    ext= (value & RISCV_HWPROBE_EXT_ZBC) ? 1 : 0;
-    if (value & RISCV_HWPROBE_EXT_ZVBC)
-      ext |= 2;
-    return ext;
+    return ((value & RISCV_HWPROBE_EXT_ZBC) ? 1u : 0u) |
+           ((value & RISCV_HWPROBE_EXT_ZVBC) ? 2u : 0u);
   }
 #else
-  (void) hwprobe;
+  std::ignore = hwprobe;
 #endif
   if (syscall(SYS_riscv_hwprobe, &p, (size_t) 1, (size_t) 0, NULL, 0) != 0)
     return 0;
-  ext= (p.value & RISCV_HWPROBE_EXT_ZBC) ? 1 : 0;
-  if (p.value & RISCV_HWPROBE_EXT_ZVBC)
-    ext |= 2;
-  return ext;
+  return ((p.value & RISCV_HWPROBE_EXT_ZBC) ? 1u : 0u) |
+         ((p.value & RISCV_HWPROBE_EXT_ZVBC) ? 2u : 0u);
 }
 
 extern "C" const char *crc32c_riscv_impl(my_crc32_t c)
